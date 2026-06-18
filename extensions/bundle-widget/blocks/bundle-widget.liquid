@@ -1,0 +1,656 @@
+{% comment %}
+  Bundle Widget — app block for product pages (Online Store 2.0).
+  Renders: quantity-break tiers (with per-unit variant selectors), BOGO rows,
+  "Complete the bundle" cards (from Mix & Match offers with 2–4 products),
+  and add-on upsells (shipping protection, warranty, any product).
+  Config comes server-side from the shop metafield (zero API calls).
+{% endcomment %}
+
+{%- assign cfg = shop.metafields.bundle_engine.offers.value -%}
+
+{%- comment -%}
+  Design settings — parsed the same way as the offers metafield, with safe
+  defaults so the widget renders correctly even if /app/design was never
+  saved (bundle_engine.design metafield absent).
+  Shape written by app/models/design-settings.server.ts (compileDesignConfig):
+    { "layout": "cards"|"table"|"horizontal"|"compact",
+      "accentColor": "#0A6E4A", "badgeColor": "#0A6E4A", "saveColor": "#FDECE7",
+      "cornerRadius": "12px", "cardGap": 10 }
+{%- endcomment -%}
+{%- assign design_cfg = shop.metafields.bundle_engine.design.value -%}
+{%- assign design_layout = 'cards' -%}
+{%- assign design_accent = '#0A6E4A' -%}
+{%- assign design_badge = '#0A6E4A' -%}
+{%- assign design_save = '#FDECE7' -%}
+{%- assign design_radius = '12px' -%}
+{%- assign design_gap = 10 -%}
+{%- if design_cfg -%}
+  {%- if design_cfg.layout -%}{%- assign design_layout = design_cfg.layout -%}{%- endif -%}
+  {%- if design_cfg.accentColor -%}{%- assign design_accent = design_cfg.accentColor -%}{%- endif -%}
+  {%- if design_cfg.badgeColor -%}{%- assign design_badge = design_cfg.badgeColor -%}{%- endif -%}
+  {%- if design_cfg.saveColor -%}{%- assign design_save = design_cfg.saveColor -%}{%- endif -%}
+  {%- if design_cfg.cornerRadius -%}{%- assign design_radius = design_cfg.cornerRadius -%}{%- endif -%}
+  {%- if design_cfg.cardGap -%}{%- assign design_gap = design_cfg.cardGap -%}{%- endif -%}
+{%- endif -%}
+
+{%- assign pid = product.id | append: '' -%}
+{%- assign qb = false -%}
+{%- assign has_bogo = false -%}
+{%- assign bundle_offer = false -%}
+{%- assign promo = false -%}
+
+{%- if cfg and cfg.offers -%}
+  {%- for offer in cfg.offers -%}
+    {%- if offer.productIds contains pid -%}
+      {%- if offer.type == 'QUANTITY_BREAK' and qb == false -%}
+        {%- assign qb = offer -%}
+      {%- elsif offer.type == 'BOGO' -%}
+        {%- assign has_bogo = true -%}
+      {%- elsif offer.type == 'MIX_MATCH' -%}
+        {%- assign hcount = offer.handles | size -%}
+        {%- if bundle_offer == false and hcount >= 2 and hcount <= 4 and offer.minQty <= hcount -%}
+          {%- assign bundle_offer = offer -%}
+        {%- elsif promo == false -%}
+          {%- assign promo = offer -%}
+        {%- endif -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+
+{%- assign unit = product.selected_or_first_available_variant.price -%}
+{%- assign store_currency = cart.currency.iso_code -%}
+{%- assign design = block.settings.design | default: 'clean' -%}
+{%- assign show_variants = block.settings.show_variants -%}
+{%- assign multi_variant = false -%}
+{%- if product.variants.size > 1 and show_variants -%}{%- assign multi_variant = true -%}{%- endif -%}
+{%- assign tier_image = false -%}
+{%- if design != 'clean' -%}
+  {%- if block.settings.custom_image -%}
+    {%- assign tier_image = block.settings.custom_image -%}
+  {%- elsif product.featured_image -%}
+    {%- assign tier_image = product.featured_image -%}
+  {%- endif -%}
+{%- endif -%}
+
+{%- assign has_addons = false -%}
+{%- if block.settings.addons.count > 0 -%}{%- assign has_addons = true -%}{%- endif -%}
+{%- if cfg and cfg.offers -%}
+  {%- for offer in cfg.offers -%}
+    {%- if offer.productIds contains pid and offer.addons -%}
+      {%- assign oc = offer.addons | size -%}
+      {%- if oc > 0 -%}{%- assign has_addons = true -%}{%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+
+{%- if qb or has_bogo or bundle_offer or promo or has_addons -%}
+{%- assign track_offer = false -%}
+{%- if qb -%}{%- assign track_offer = qb -%}
+{%- elsif bundle_offer -%}{%- assign track_offer = bundle_offer -%}
+{%- elsif promo -%}{%- assign track_offer = promo -%}
+{%- endif -%}
+{%- if block.settings.hide_native_controls -%}
+  {%- comment -%}
+    Hide the theme's native price / variant picker / quantity selector for
+    THIS product only — scoped to this section so other products (where the
+    widget doesn't render) are unaffected. Covers Dawn and most Dawn-based
+    themes; merchants can add theme-specific selectors via the "Advanced"
+    setting below if their theme uses different markup.
+  {%- endcomment -%}
+  <style>
+    #shopify-section-{{ section.id }} [id^="price-"],
+    #shopify-section-{{ section.id }} .price,
+    #shopify-section-{{ section.id }} .product__tax,
+    #shopify-section-{{ section.id }} variant-selects,
+    #shopify-section-{{ section.id }} .product-form__input,
+    #shopify-section-{{ section.id }} quantity-input,
+    #shopify-section-{{ section.id }} .quantity
+    {%- if block.settings.hide_native_selectors != blank -%}
+      {%- assign extra_selectors = block.settings.hide_native_selectors | split: ',' -%}
+      {%- for sel in extra_selectors -%}
+        , #shopify-section-{{ section.id }} {{ sel | strip }}
+      {%- endfor -%}
+    {%- endif -%}
+    {
+      display: none !important;
+    }
+  </style>
+{%- endif -%}
+
+{%- comment -%}
+  Make the theme's "Add to cart" / "Buy it now" buttons span the full
+  width of the product form on desktop, matching the bundle widget's
+  width. (On mobile these are already full-width via `button--full-width`;
+  some themes constrain the buttons container or the accelerated-checkout
+  element to a narrower size at desktop breakpoints.)
+{%- endcomment -%}
+<style>
+  @media screen and (min-width: 750px) {
+    #shopify-section-{{ section.id }} .product-form__buttons,
+    #shopify-section-{{ section.id }} .product-form__submit,
+    #shopify-section-{{ section.id }} .shopify-payment-button,
+    #shopify-section-{{ section.id }} shopify-accelerated-checkout {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+  }
+</style>
+
+<div
+  class="be-widget"
+  data-be-widget
+  {% if track_offer %}data-be-offer="{{ track_offer.id }}"{% endif %}
+  data-be-design="{{ design }}"
+  data-be-layout="{{ design_layout }}"
+  style="--be-accent: {{ design_accent }}; --be-badge-color: {{ design_badge }}; --be-save-color: {{ design_save }}; --be-radius: {{ design_radius }}; --be-gap: {{ design_gap }}px; --be-text-size: {{ block.settings.text_size | default: 15 }}px; --be-heading-size: {{ block.settings.heading_size | default: 16 }}px; --be-img-size: {{ block.settings.image_size | default: 48 }}px;"
+  {{ block.shopify_attributes }}
+>
+  {%- if promo -%}
+    <div class="be-promo">✨ Mix &amp; Match:
+      {%- if promo.tiers and promo.tiers.size > 0 -%}
+        {%- for t in promo.tiers -%}
+          {%- assign tpct = t.v | divided_by: 100 -%}
+          any {{ t.minQty }} = {{ tpct }}% off{% unless forloop.last %} · {% endunless %}
+        {%- endfor -%}
+      {%- else -%}
+        any {{ promo.minQty }} qualifying products = {{ promo.percentOff }}% off
+      {%- endif -%}
+    </div>
+  {%- endif -%}
+
+  {%- if block.settings.heading != blank -%}
+    <p class="be-heading">{{ block.settings.heading | escape }}</p>
+  {%- endif -%}
+
+  <div class="be-tiers be-layout-{{ design_layout }}" role="radiogroup" aria-label="Bundle and save">
+
+    {%- assign has_qty1 = false -%}
+    {%- if qb -%}
+      {%- for tier in qb.tiers -%}
+        {%- if tier.minQty == 1 -%}{%- assign has_qty1 = true -%}{%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+
+    {%- comment -%} Default single-unit row {%- endcomment -%}
+    {%- unless has_qty1 -%}
+    <label class="be-tier" data-be-tier data-qty="1" data-total="{{ unit }}">
+      <input type="radio" name="be-tier-{{ block.id }}" value="1" checked>
+      {%- if tier_image -%}
+        <span class="be-tier-img">{{ tier_image | image_url: width: 96 | image_tag: loading: 'lazy', alt: product.title }}</span>
+      {%- endif -%}
+      <span class="be-tier-main">
+        <span class="be-tier-label">Buy 1</span>
+        <span class="be-tier-price">{{ unit | money }}</span>
+      </span>
+    </label>
+    {%- endunless -%}
+
+    {%- comment -%} Quantity-break tiers {%- endcomment -%}
+    {%- if qb -%}
+      {%- for tier in qb.tiers -%}
+        {%- assign show_price = true -%}
+        {%- if tier.t == 'NONE' -%}
+          {%- assign tp = unit -%}
+        {%- elsif tier.t == 'PERCENTAGE' -%}
+          {%- assign factor = 10000 | minus: tier.v -%}
+          {%- assign tp = unit | times: factor | divided_by: 10000 -%}
+        {%- elsif tier.t == 'FIXED_UNIT_PRICE' -%}
+          {%- if store_currency == shop.currency -%}
+            {%- assign tp = tier.v -%}
+          {%- else -%}
+            {%- assign show_price = false -%}{%- assign tp = unit -%}
+          {%- endif -%}
+        {%- elsif tier.t == 'FIXED_AMOUNT' -%}
+          {%- if store_currency == shop.currency -%}
+            {%- assign tp = unit | minus: tier.v -%}
+          {%- else -%}
+            {%- assign show_price = false -%}{%- assign tp = unit -%}
+          {%- endif -%}
+        {%- endif -%}
+        {%- if tp < 0 -%}{%- assign tp = 0 -%}{%- endif -%}
+        {%- assign total = tp | times: tier.minQty -%}
+        {%- assign full = unit | times: tier.minQty -%}
+        {%- assign saved = full | minus: total -%}
+        {%- if full > 0 -%}
+          {%- assign save_pct = saved | times: 100 | divided_by: full -%}
+        {%- else -%}
+          {%- assign save_pct = 0 -%}{%- assign saved = 0 -%}
+        {%- endif -%}
+
+        <label class="be-tier{% if tier.pre %} be-preselected{% endif %}"
+               data-be-tier data-qty="{{ tier.minQty }}" data-total="{{ total }}">
+          <input type="radio" name="be-tier-{{ block.id }}" value="{{ tier.minQty }}"
+                 {% if tier.pre and tier.bundle == blank %}checked{% endif %}>
+          {%- if tier.badge -%}<span class="be-badge">{{ tier.badge | escape }}</span>{%- endif -%}
+          {%- if tier.img -%}
+            <span class="be-tier-img"><img src="{{ tier.img }}" alt="{{ tier.label | escape }}" loading="lazy" width="96" height="96"></span>
+          {%- elsif tier_image -%}
+            <span class="be-tier-img">{{ tier_image | image_url: width: 96 | image_tag: loading: 'lazy', alt: product.title }}</span>
+          {%- endif -%}
+          <span class="be-tier-main">
+            <span class="be-tier-label">{{ tier.label | default: 'Bundle' | escape }}</span>
+            {%- if tier.sub -%}<span class="be-tier-sub">{{ tier.sub | escape }}</span>{%- endif -%}
+            {%- if tier.t == 'NONE' -%}
+              <span class="be-tier-price">{{ unit | money }}</span>
+            {%- elsif show_price -%}
+              <span class="be-tier-price">
+                {{ tp | money }} <small>each</small>
+                <s class="be-compare">{{ unit | money }}</s>
+              </span>
+            {%- else -%}
+              <span class="be-tier-price">Special price at checkout</span>
+            {%- endif -%}
+          </span>
+          {%- if tier.chip -%}
+            <span class="be-save">{{ tier.chip | escape }}</span>
+          {%- elsif show_price and saved > 0 -%}
+            <span class="be-save">SAVE {{ save_pct }}%</span>
+          {%- endif -%}
+          {%- if tier.fs or tier.gift -%}
+            <span class="be-tier-foot">
+              {%- if tier.fs -%}<span>+ FREE SHIPPING</span>{%- endif -%}
+              {%- if tier.gift -%}<span>🎁 FREE GIFT: {{ tier.gift.title | escape }}</span>{%- endif -%}
+            </span>
+          {%- endif -%}
+          {%- if multi_variant and tier.minQty > 1 -%}
+            <span class="be-units" data-be-units>
+              {%- for n in (1..tier.minQty) -%}
+                <span class="be-unit-row">
+                  <span class="be-unit-n">#{{ n }}</span>
+                  <select data-be-unit-variant aria-label="Variant for item {{ n }}">
+                    {%- for v in product.variants -%}
+                      {%- if v.available -%}
+                        <option value="{{ v.id }}">{{ v.title | escape }}</option>
+                      {%- endif -%}
+                    {%- endfor -%}
+                  </select>
+                </span>
+              {%- endfor -%}
+            </span>
+          {%- endif -%}
+        </label>
+
+        {%- comment -%} "Complete the bundle" cross-sell for this tier (full price, no extra discount) {%- endcomment -%}
+        {%- if tier.bundle and tier.bundle.size > 0 -%}
+          {%- assign bb_total = total -%}
+          {%- assign bb_full = full -%}
+          <label class="be-tier be-bundle{% if tier.pre %} be-preselected{% endif %}"
+                 data-be-tier data-be-bundle data-qty="0">
+            <input type="radio" name="be-tier-{{ block.id }}" value="bundle-{{ tier.minQty }}"
+                   {% if tier.pre %}checked{% endif %}>
+            <span class="be-badge">{{ tier.badge | default: 'MOST POPULAR' | escape }}</span>
+            <span class="be-tier-main">
+              <span class="be-bundle-head">
+                <span class="be-tier-label">{{ tier.label | default: 'Complete the bundle' | escape }}</span>
+              </span>
+              <span class="be-bundle-products">
+                {%- for n in (1..tier.minQty) -%}
+                  <span class="be-bundle-product">
+                    {%- if tier_image -%}
+                      <span class="be-tier-img">{{ tier_image | image_url: width: 96 | image_tag: loading: 'lazy', alt: product.title }}</span>
+                    {%- endif -%}
+                    <span class="be-bundle-product-main">
+                      <span class="be-tier-label">{{ product.title | escape }}</span>
+                      {%- if multi_variant -%}
+                        <select data-be-bundle-variant aria-label="Variant for {{ product.title | escape }}">
+                          {%- for v in product.variants -%}
+                            {%- if v.available -%}<option value="{{ v.id }}">{{ v.title | escape }}</option>{%- endif -%}
+                          {%- endfor -%}
+                        </select>
+                      {%- else -%}
+                        <input type="hidden" data-be-bundle-variant value="{{ product.selected_or_first_available_variant.id }}">
+                      {%- endif -%}
+                    </span>
+                    <span class="be-tier-price">
+                      {%- if tier.t == 'NONE' -%}
+                        {{ unit | money }}
+                      {%- elsif show_price -%}
+                        {{ tp | money }} <s class="be-compare">{{ unit | money }}</s>
+                      {%- else -%}
+                        {{ unit | money }}
+                      {%- endif -%}
+                    </span>
+                  </span>
+                {%- endfor -%}
+                {%- for bref in tier.bundle -%}
+                  {%- assign bp = all_products[bref.h] -%}
+                  {%- if bp.id -%}
+                    {%- assign bpv = bp.selected_or_first_available_variant -%}
+                    {%- if bref.vid -%}
+                      {%- for v in bp.variants -%}
+                        {%- if v.id == bref.vid -%}{%- assign bpv = v -%}{%- endif -%}
+                      {%- endfor -%}
+                    {%- endif -%}
+                    {%- assign bpu = bpv.price -%}
+                    {%- assign bb_total = bb_total | plus: bpu -%}
+                    {%- assign bb_full = bb_full | plus: bpu -%}
+                    <span class="be-bundle-product">
+                      {%- if bp.featured_image -%}
+                        <span class="be-tier-img">{{ bp.featured_image | image_url: width: 96 | image_tag: loading: 'lazy', alt: bp.title }}</span>
+                      {%- endif -%}
+                      <span class="be-bundle-product-main">
+                        <span class="be-tier-label">{{ bref.t | default: bp.title | escape }}</span>
+                        {%- if bp.variants.size > 1 -%}
+                          <select data-be-bundle-variant aria-label="Variant for {{ bp.title | escape }}">
+                            {%- for v in bp.variants -%}
+                              {%- if v.available -%}
+                                <option value="{{ v.id }}"{% if v.id == bpv.id %} selected{% endif %}>{{ v.title | escape }}</option>
+                              {%- endif -%}
+                            {%- endfor -%}
+                          </select>
+                        {%- else -%}
+                          <input type="hidden" data-be-bundle-variant value="{{ bpv.id }}">
+                        {%- endif -%}
+                      </span>
+                      <span class="be-tier-price">{{ bpu | money }}</span>
+                    </span>
+                  {%- endif -%}
+                {%- endfor -%}
+              </span>
+              <span class="be-bundle-summary">
+                <strong>{{ bb_total | money }}</strong>
+                {%- if bb_full > bb_total -%}<s class="be-compare">{{ bb_full | money }}</s>{%- endif -%}
+                {%- assign bb_saved = bb_full | minus: bb_total -%}
+                {%- if bb_saved > 0 -%}<span class="be-save">Save {{ bb_saved | money }}!</span>{%- endif -%}
+              </span>
+            </span>
+            {%- if tier.fs or tier.gift -%}
+              <span class="be-tier-foot">
+                {%- if tier.fs -%}<span>+ FREE SHIPPING</span>{%- endif -%}
+                {%- if tier.gift -%}<span>🎁 FREE GIFT: {{ tier.gift.title | escape }}</span>{%- endif -%}
+              </span>
+            {%- endif -%}
+          </label>
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+
+    {%- comment -%} BOGO rows — one selectable row per tier rung {%- endcomment -%}
+    {%- if cfg and cfg.offers -%}
+      {%- for offer in cfg.offers -%}
+        {%- if offer.type == 'BOGO' and offer.productIds contains pid and offer.tiers -%}
+          {%- for tier in offer.tiers -%}
+            {%- assign bx = tier.minQty -%}
+            {%- assign by = tier.get | default: 1 -%}
+            {%- assign group = bx | plus: by -%}
+            {%- assign resty = 10000 | minus: tier.v -%}
+            {%- assign ytotal = unit | times: by | times: resty | divided_by: 10000 -%}
+            {%- assign btotal = unit | times: bx | plus: ytotal -%}
+            {%- assign bfull = unit | times: group -%}
+            <label class="be-tier" data-be-tier data-qty="{{ group }}" data-total="{{ btotal }}">
+              <input type="radio" name="be-tier-{{ block.id }}" value="{{ group }}">
+              {%- if tier.badge -%}<span class="be-badge">{{ tier.badge | escape }}</span>{%- endif -%}
+              {%- if tier.img -%}
+                <span class="be-tier-img"><img src="{{ tier.img }}" alt="{{ tier.label | escape }}" loading="lazy" width="96" height="96"></span>
+              {%- elsif tier_image -%}
+                <span class="be-tier-img">{{ tier_image | image_url: width: 96 | image_tag: loading: 'lazy', alt: product.title }}</span>
+              {%- endif -%}
+              <span class="be-tier-main">
+                <span class="be-tier-label">{{ tier.label | escape }}</span>
+                {%- if tier.sub -%}<span class="be-tier-sub">{{ tier.sub | escape }}</span>{%- endif -%}
+                <span class="be-tier-price">
+                  {{ btotal | money }}
+                  <s class="be-compare">{{ bfull | money }}</s>
+                </span>
+              </span>
+              {%- if tier.chip -%}<span class="be-save">{{ tier.chip | escape }}</span>{%- endif -%}
+              {%- if multi_variant -%}
+                <span class="be-units" data-be-units>
+                  {%- for n in (1..group) -%}
+                    <span class="be-unit-row">
+                      <span class="be-unit-n">#{{ n }}</span>
+                      <select data-be-unit-variant aria-label="Variant for item {{ n }}">
+                        {%- for v in product.variants -%}
+                          {%- if v.available -%}
+                            <option value="{{ v.id }}">{{ v.title | escape }}</option>
+                          {%- endif -%}
+                        {%- endfor -%}
+                      </select>
+                    </span>
+                  {%- endfor -%}
+                </span>
+              {%- endif -%}
+            </label>
+          {%- endfor -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+
+    {%- comment -%} "Complete the bundle" card (Mix & Match, 2–4 products) {%- endcomment -%}
+    {%- if bundle_offer -%}
+      {%- assign b_full = 0 -%}
+      {%- assign b_disc = 0 -%}
+      {%- assign b_rest = 100 | minus: bundle_offer.percentOff -%}
+      <label class="be-tier be-bundle" data-be-tier data-be-bundle data-qty="0">
+        <input type="radio" name="be-tier-{{ block.id }}" value="bundle">
+        <span class="be-badge">MOST POPULAR</span>
+        <span class="be-tier-main">
+          <span class="be-bundle-head">
+            <span class="be-tier-label">{{ bundle_offer.name | default: 'Complete the bundle' | escape }}</span>
+            <span class="be-bundle-total" data-be-bundle-total></span>
+          </span>
+          <span class="be-bundle-products">
+            {%- for h in bundle_offer.handles -%}
+              {%- assign bp = all_products[h] -%}
+              {%- if bp.id -%}
+                {%- assign bp_unit = bp.selected_or_first_available_variant.price -%}
+                {%- assign bp_disc = bp_unit | times: b_rest | divided_by: 100 -%}
+                {%- assign b_full = b_full | plus: bp_unit -%}
+                {%- assign b_disc = b_disc | plus: bp_disc -%}
+                <span class="be-bundle-product">
+                  {%- if bp.featured_image -%}
+                    <span class="be-tier-img">{{ bp.featured_image | image_url: width: 96 | image_tag: loading: 'lazy', alt: bp.title }}</span>
+                  {%- endif -%}
+                  <span class="be-bundle-product-main">
+                    <span class="be-tier-label">{{ bp.title | escape }}</span>
+                    {%- if bp.variants.size > 1 -%}
+                      <select data-be-bundle-variant aria-label="Variant for {{ bp.title | escape }}">
+                        {%- for v in bp.variants -%}
+                          {%- if v.available -%}
+                            <option value="{{ v.id }}">{{ v.title | escape }}</option>
+                          {%- endif -%}
+                        {%- endfor -%}
+                      </select>
+                    {%- else -%}
+                      <input type="hidden" data-be-bundle-variant value="{{ bp.selected_or_first_available_variant.id }}">
+                    {%- endif -%}
+                  </span>
+                  <span class="be-tier-price">
+                    {{ bp_disc | money }}
+                    <s class="be-compare">{{ bp_unit | money }}</s>
+                  </span>
+                </span>
+              {%- endif -%}
+            {%- endfor -%}
+          </span>
+          <span class="be-bundle-summary">
+            <strong>{{ b_disc | money }}</strong>
+            <s class="be-compare">{{ b_full | money }}</s>
+            {%- assign b_saved = b_full | minus: b_disc -%}
+            <span class="be-save">Save {{ b_saved | money }}!</span>
+          </span>
+        </span>
+      </label>
+    {%- endif -%}
+  </div>
+
+  {%- comment -%} Add-on upsells {%- endcomment -%}
+  {%- if has_addons -%}
+    <div class="be-addons">
+      {%- comment -%} Offer-level add-ons (configured in the app, any offer type) {%- endcomment -%}
+      {%- for boffer in cfg.offers -%}
+        {%- if boffer.productIds contains pid and boffer.addons -%}
+        {%- for a in boffer.addons -%}
+          {%- assign abp = all_products[a.h] -%}
+          <label class="be-addon">
+            <input type="checkbox" data-be-addon value="{{ a.vid }}"{% if a.pre %} checked{% endif %}>
+            {%- if abp.featured_image -%}
+              <span class="be-tier-img">{{ abp.featured_image | image_url: width: 64 | image_tag: loading: 'lazy', alt: a.t }}</span>
+            {%- endif -%}
+            <span class="be-tier-main">
+              <span class="be-tier-label">{{ a.t | escape }}</span>
+            </span>
+            <span class="be-addon-price">
+              {%- if abp.id -%}
+                {%- assign aav = abp.selected_or_first_available_variant -%}
+                {%- if aav.price == 0 -%}
+                  <span class="be-save">FREE</span>
+                {%- else -%}
+                  {{ aav.price | money }}
+                  {%- if aav.compare_at_price > aav.price -%}
+                    <s class="be-compare">{{ aav.compare_at_price | money }}</s>
+                  {%- endif -%}
+                {%- endif -%}
+              {%- endif -%}
+            </span>
+          </label>
+        {%- endfor -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- comment -%} Theme-editor add-ons (block setting) {%- endcomment -%}
+      {%- for ap in block.settings.addons -%}
+        {%- assign av = ap.selected_or_first_available_variant -%}
+        {%- if av -%}
+          <label class="be-addon">
+            <input type="checkbox" data-be-addon value="{{ av.id }}">
+            {%- if ap.featured_image -%}
+              <span class="be-tier-img">{{ ap.featured_image | image_url: width: 64 | image_tag: loading: 'lazy', alt: ap.title }}</span>
+            {%- endif -%}
+            <span class="be-tier-main">
+              <span class="be-tier-label">{{ ap.title | escape }}</span>
+            </span>
+            <span class="be-addon-price">
+              {%- if av.price == 0 -%}
+                <span class="be-save">FREE</span>
+              {%- else -%}
+                {{ av.price | money }}
+                {%- if av.compare_at_price > av.price -%}
+                  <s class="be-compare">{{ av.compare_at_price | money }}</s>
+                {%- endif -%}
+              {%- endif -%}
+            </span>
+          </label>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  {%- endif -%}
+
+  {%- if block.settings.show_total -%}
+    <p class="be-total" data-be-total hidden></p>
+  {%- endif -%}
+  {%- if block.settings.show_note -%}
+    <p class="be-note">Discount applies automatically in cart &amp; checkout.</p>
+  {%- endif -%}
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Bundle Widget",
+  "target": "section",
+  "javascript": "be-widget.js",
+  "stylesheet": "be-widget.css",
+  "settings": [
+    {
+      "type": "select",
+      "id": "design",
+      "label": "Design preset",
+      "options": [
+        { "value": "clean", "label": "Clean cards" },
+        { "value": "image", "label": "Cards with image" },
+        { "value": "columns", "label": "Columns" }
+      ],
+      "default": "clean"
+    },
+    {
+      "type": "image_picker",
+      "id": "custom_image",
+      "label": "Custom bundle image (optional — product image used if empty)"
+    },
+    {
+      "type": "range",
+      "id": "image_size",
+      "label": "Image size",
+      "min": 32,
+      "max": 96,
+      "step": 4,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Bundle & Save"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_variants",
+      "label": "Show variant selectors inside tiers (color/size per item)",
+      "default": true
+    },
+    {
+      "type": "product_list",
+      "id": "addons",
+      "label": "Add-on upsells (shipping protection, warranty, …)",
+      "limit": 4
+    },
+    {
+      "type": "color",
+      "id": "accent",
+      "label": "Accent color",
+      "default": "#0A6E4A"
+    },
+    {
+      "type": "range",
+      "id": "text_size",
+      "label": "Text size",
+      "min": 12,
+      "max": 22,
+      "step": 1,
+      "unit": "px",
+      "default": 15
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Heading size",
+      "min": 12,
+      "max": 28,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "checkbox",
+      "id": "show_total",
+      "label": "Show total line (e.g. \"Total for 2: …\")",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_note",
+      "label": "Show \"Discount applies automatically\" note",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Theme integration"
+    },
+    {
+      "type": "checkbox",
+      "id": "hide_native_controls",
+      "label": "Hide the theme's price, variant picker, and quantity selector",
+      "info": "Recommended — this widget shows its own price, options, and quantity per tier. Only hides them on products where this widget actually appears.",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "hide_native_selectors",
+      "label": "Advanced: extra CSS selectors to hide (comma-separated)",
+      "info": "Only needed if your theme uses different markup and the price/variant/quantity controls still show up."
+    }
+  ]
+}
+{% endschema %}

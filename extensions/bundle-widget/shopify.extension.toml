@@ -1,0 +1,11 @@
+# REFERENCE shopify.extension.toml for extensions/bundle-widget/
+# The CLI generates this when you create the theme app extension.
+# It should look exactly like this (handle/name must be bundle-widget):
+
+api_version = "2025-04"
+
+[[extensions]]
+name = "bundle-widget"
+handle = "bundle-widget"
+uid = "8738ae3d-25c4-f928-2ab3-1488c50a48290045fd0b"
+type = "theme"

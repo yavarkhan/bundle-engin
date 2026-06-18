@@ -1,0 +1,513 @@
+/* Bundle Widget styles — extensions/bundle-widget/assets/be-widget.css
+   Scoped under .be-widget; never leaks into theme styles. Mobile-first.
+   Font family follows the theme; sizes scale from the block's
+   "Text size" / "Heading size" settings (em units inside). */
+.be-widget {
+  --be-accent: #0a6e4a;
+  --be-badge-color: var(--be-accent);
+  --be-save-color: #fdece7;
+  --be-radius: 12px;
+  --be-gap: 10px;
+  margin: 12px 0;
+  font-family: var(--font-body-family, inherit);
+  font-style: var(--font-body-style, normal);
+  font-size: var(--be-text-size, 15px);
+}
+.be-widget * {
+  font-family: inherit;
+}
+.be-heading {
+  font-family: var(--font-heading-family, inherit);
+  font-style: var(--font-heading-style, normal);
+  font-weight: 700;
+  font-size: var(--be-heading-size, 16px);
+  margin: 0 0 8px;
+}
+.be-promo {
+  background: color-mix(in srgb, var(--be-accent) 10%, white);
+  border: 1px solid var(--be-accent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95em;
+  margin-bottom: 10px;
+}
+.be-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--be-gap, 10px);
+}
+.be-tier {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1.5px solid #d9d9d9;
+  border-radius: var(--be-radius, 12px);
+  --be-tier-pad: 14px;
+  padding: var(--be-tier-pad);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-height: 56px; /* stable height = zero layout shift on selection */
+  font-size: 1em;
+}
+.be-tier input[type="radio"] {
+  accent-color: var(--be-accent);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+}
+.be-tier.be-selected,
+.be-tier:has(input:checked) {
+  border-color: var(--be-accent);
+  box-shadow: 0 0 0 1px var(--be-accent);
+}
+.be-tier-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.be-tier-label {
+  font-weight: 700;
+}
+.be-tier-price {
+  font-size: 0.95em;
+}
+.be-tier-sub {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+.be-tier-img img {
+  background: #f5f5f5;
+}
+.be-tier-price small {
+  opacity: 0.7;
+}
+.be-compare {
+  opacity: 0.55;
+  margin-left: 6px;
+  font-size: 0.85em;
+}
+.be-badge {
+  position: absolute;
+  top: -9px;
+  right: 12px;
+  background: var(--be-badge-color, var(--be-accent));
+  color: #fff;
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+.be-save {
+  flex: none;
+  background: var(--be-save-color, #fdece7);
+  color: #c4320a;
+  font-weight: 700;
+  font-size: 0.8em;
+  padding: 4px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.be-total {
+  margin: 10px 0 0;
+  font-weight: 600;
+}
+.be-note {
+  margin: 6px 0 0;
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+@media (min-width: 640px) {
+  .be-tier {
+    --be-tier-pad: 16px;
+    padding: var(--be-tier-pad);
+  }
+}
+
+/* ── Tier perk banner (+ FREE SHIPPING / FREE GIFT) ────────────── */
+/* Margins extend to the outer edge of the tier's border (padding +
+   border-width) and the bottom corners use the same radius as the
+   tier card itself, so the banner's rounded corners align exactly
+   with the card outline instead of poking out past it. */
+.be-tier-foot {
+  /* The theme sets a global box-sizing: border-box (inherited), under which
+     flex-basis: 100% would resolve to the parent's CONTENT-box width
+     (parent width minus its own padding+border) — leaving this banner
+     short on both sides regardless of margin/padding. Reverting to
+     content-box here makes flex-basis: 100% + this padding produce a
+     border-box exactly equal to the parent's border-box, so the corner
+     radii line up. */
+  box-sizing: content-box;
+  flex-basis: 100%;
+  display: flex;
+  gap: 14px;
+  margin: 10px calc(-1 * (var(--be-tier-pad, 14px) + 1.5px))
+    calc(-1 * (var(--be-tier-pad, 14px) + 1.5px));
+  padding: 7px calc(var(--be-tier-pad, 14px) + 1.5px);
+  background: var(--be-accent);
+  color: #fff;
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 0 0 var(--be-radius, 12px) var(--be-radius, 12px);
+}
+
+/* ── Per-unit variant selectors ────────────────────────────────── */
+.be-units {
+  display: none;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.be-tier.be-selected .be-units,
+.be-tier:has(input:checked) .be-units {
+  display: flex;
+}
+.be-unit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.be-unit-n {
+  font-size: 0.8em;
+  opacity: 0.6;
+  min-width: 22px;
+}
+.be-units select,
+.be-bundle-product-main select {
+  font: inherit;
+  font-size: 0.9em;
+  padding: 6px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fff;
+  max-width: 240px;
+}
+.be-tier {
+  flex-wrap: wrap;
+}
+
+/* ── "Complete the bundle" card ────────────────────────────────── */
+.be-bundle .be-bundle-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.be-bundle-products {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.be-bundle-product {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f7f7f7;
+  border-radius: 10px;
+  padding: 10px;
+}
+.be-bundle-product-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.be-bundle-product .be-tier-price {
+  text-align: right;
+  white-space: nowrap;
+}
+.be-bundle-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 1.05em;
+}
+
+/* ── Add-on upsells ────────────────────────────────────────────── */
+.be-addons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.be-addon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1.5px solid #d9d9d9;
+  border-radius: var(--be-radius, 12px);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.be-addon:has(input:checked) {
+  border-color: var(--be-accent);
+  box-shadow: 0 0 0 1px var(--be-accent);
+}
+.be-addon input[type="checkbox"] {
+  accent-color: var(--be-accent);
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+.be-addon .be-tier-img img {
+  width: calc(var(--be-img-size, 48px) * 0.75);
+  height: calc(var(--be-img-size, 48px) * 0.75);
+}
+.be-addon-price {
+  white-space: nowrap;
+  font-size: 0.9em;
+}
+
+/* ── Design preset: cards with image ───────────────────────────── */
+.be-tier-img {
+  flex: none;
+  display: block;
+}
+.be-tier-img img {
+  width: var(--be-img-size, 48px);
+  height: var(--be-img-size, 48px);
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+.be-widget[data-be-design="image"] .be-badge {
+  left: -1px;
+  right: auto;
+  top: -10px;
+  border-radius: 4px 4px 4px 0;
+}
+
+/* ── Design preset: columns ────────────────────────────────────── */
+.be-widget[data-be-design="columns"] .be-tiers {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+}
+.be-widget[data-be-design="columns"] .be-tier {
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: flex-start;
+  text-align: center;
+  padding: 14px 8px 10px;
+  gap: 8px;
+  min-width: 0;
+}
+.be-widget[data-be-design="columns"] .be-tier input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.be-widget[data-be-design="columns"] .be-tier-img img {
+  width: calc(var(--be-img-size, 48px) * 1.15);
+  height: calc(var(--be-img-size, 48px) * 1.15);
+  margin: 0 auto;
+}
+.be-widget[data-be-design="columns"] .be-tier-main {
+  align-items: center;
+}
+.be-widget[data-be-design="columns"] .be-badge {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 95%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.be-widget[data-be-design="columns"] .be-save {
+  align-self: center;
+}
+@media (max-width: 480px) {
+  .be-widget[data-be-design="columns"] .be-tier {
+    padding: 12px 4px 8px;
+  }
+  .be-widget[data-be-design="columns"] .be-tier-img img {
+    width: calc(var(--be-img-size, 48px) * 0.9);
+    height: calc(var(--be-img-size, 48px) * 0.9);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   WIDGET LAYOUTS (Design settings → /app/design)
+   Driven by `.be-layout-{cards|table|horizontal|compact}` on
+   `.be-tiers`, set from the `design.layout` value parsed from the
+   `bundle_engine.design` shop metafield. "cards" = existing behaviour
+   (no extra rules needed). All layouts keep the same markup
+   ([data-be-tier], [data-qty], [data-total], radio inputs, etc.) —
+   only presentation changes.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Layout: table ──────────────────────────────────────────────
+   Each .be-tier becomes a table row: radio | label/price | savings.
+   "Complete the bundle" cards and add-ons keep their card styling
+   (they don't fit a simple Qty/Price/Savings row). */
+.be-tiers.be-layout-table {
+  display: table;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  gap: 0;
+}
+.be-tiers.be-layout-table > .be-tier {
+  display: table-row;
+  border: none;
+  padding: 0;
+  min-height: 0;
+}
+.be-tiers.be-layout-table > .be-tier:not(.be-bundle) {
+  background: transparent;
+}
+.be-tiers.be-layout-table > .be-tier > * {
+  display: table-cell;
+  vertical-align: middle;
+  border-top: 1.5px solid #d9d9d9;
+  border-bottom: 1.5px solid #d9d9d9;
+  padding: 10px 12px;
+}
+.be-tiers.be-layout-table > .be-tier > *:first-child {
+  border-left: 1.5px solid #d9d9d9;
+  border-radius: var(--be-radius, 12px) 0 0 var(--be-radius, 12px);
+}
+.be-tiers.be-layout-table > .be-tier > *:last-child {
+  border-right: 1.5px solid #d9d9d9;
+  border-radius: 0 var(--be-radius, 12px) var(--be-radius, 12px) 0;
+}
+.be-tiers.be-layout-table > .be-tier input[type="radio"] {
+  display: table-cell;
+}
+.be-tiers.be-layout-table > .be-tier.be-selected > *,
+.be-tiers.be-layout-table > .be-tier:has(input:checked) > * {
+  border-color: var(--be-accent);
+  box-shadow: inset 0 1.5px 0 var(--be-accent), inset 0 -1.5px 0 var(--be-accent);
+}
+.be-tiers.be-layout-table > .be-tier.be-selected > *:first-child,
+.be-tiers.be-layout-table > .be-tier:has(input:checked) > *:first-child {
+  box-shadow: inset 0 1.5px 0 var(--be-accent), inset 0 -1.5px 0 var(--be-accent),
+    inset 1.5px 0 0 var(--be-accent);
+}
+.be-tiers.be-layout-table > .be-tier.be-selected > *:last-child,
+.be-tiers.be-layout-table > .be-tier:has(input:checked) > *:last-child {
+  box-shadow: inset 0 1.5px 0 var(--be-accent), inset 0 -1.5px 0 var(--be-accent),
+    inset -1.5px 0 0 var(--be-accent);
+}
+/* Badges sit inline in the price cell instead of floating */
+.be-tiers.be-layout-table .be-badge {
+  position: static;
+  display: inline-block;
+  margin-left: 6px;
+  transform: none;
+}
+/* Per-unit variant selectors + tier-foot still need full-width rows */
+.be-tiers.be-layout-table .be-units,
+.be-tiers.be-layout-table .be-tier-foot {
+  display: block;
+}
+.be-tiers.be-layout-table > .be-tier .be-tier-img {
+  display: none; /* keep table rows compact */
+}
+/* "Complete the bundle" / BOGO cards inside a table layout fall back to
+   the normal card presentation (don't force them into table rows). */
+.be-tiers.be-layout-table > .be-tier.be-bundle {
+  display: flex;
+  border: 1.5px solid #d9d9d9;
+  border-radius: var(--be-radius, 12px);
+  padding: 14px;
+}
+.be-tiers.be-layout-table > .be-tier.be-bundle > * {
+  display: revert;
+  border: none;
+  padding: 0;
+}
+
+/* ── Layout: horizontal ─────────────────────────────────────────
+   Tiers as a horizontally scrollable row of compact pill options. */
+.be-tiers.be-layout-horizontal {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  padding-bottom: 4px;
+}
+.be-tiers.be-layout-horizontal > .be-tier {
+  flex: none;
+  scroll-snap-align: start;
+  min-width: 140px;
+  max-width: 200px;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 10px 12px;
+  gap: 4px;
+  border-radius: var(--be-radius, 12px);
+}
+.be-tiers.be-layout-horizontal > .be-tier .be-tier-img {
+  align-self: center;
+}
+.be-tiers.be-layout-horizontal > .be-tier .be-tier-main {
+  width: 100%;
+}
+.be-tiers.be-layout-horizontal > .be-tier .be-save {
+  align-self: flex-start;
+}
+/* "Complete the bundle" cards stay full width below the pill row */
+.be-tiers.be-layout-horizontal > .be-tier.be-bundle {
+  flex: 1 0 100%;
+  min-width: 100%;
+  max-width: none;
+  flex-direction: row;
+  scroll-snap-align: none;
+}
+.be-tiers.be-layout-horizontal .be-units {
+  flex-basis: auto;
+  width: 100%;
+}
+
+/* ── Layout: compact ────────────────────────────────────────────
+   Dense single-column list, smaller padding/typography, badge
+   shown inline next to the label instead of as a floating chip. */
+.be-tiers.be-layout-compact {
+  gap: 6px;
+}
+.be-tiers.be-layout-compact > .be-tier {
+  padding: 8px 10px;
+  gap: 8px;
+  min-height: 0;
+  font-size: 0.92em;
+  border-radius: var(--be-radius, 12px);
+}
+.be-tiers.be-layout-compact .be-tier-img img {
+  width: calc(var(--be-img-size, 48px) * 0.7);
+  height: calc(var(--be-img-size, 48px) * 0.7);
+}
+.be-tiers.be-layout-compact .be-tier-sub {
+  display: none; /* keep rows dense */
+}
+/* Badge inline, not absolutely positioned */
+.be-tiers.be-layout-compact .be-badge {
+  position: static;
+  display: inline-block;
+  margin-left: 6px;
+  transform: none;
+  vertical-align: middle;
+}
+.be-tiers.be-layout-compact .be-tier-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.be-tiers.be-layout-compact .be-tier-foot {
+  margin: 6px -11.5px -8px;
+  padding: 5px 11.5px;
+}

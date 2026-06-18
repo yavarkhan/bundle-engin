@@ -1,0 +1,124 @@
+// Bundle Engine — database schema
+// REPLACES the file prisma/schema.prisma in your generated app.
+// SQLite in development. For production set DATABASE_URL to PostgreSQL and
+// change provider to "postgresql" (see SETUP-GUIDE.md, Part E).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Required by the Shopify Remix app template. Do not remove. ──
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// ── Bundle Engine ──
+
+// One row per offer. v1 ships QUANTITY_BREAK; `type` is ready for
+// BOGO / MIX_MATCH / FREE_GIFT etc. (see docs/01-PRD.md).
+model Offer {
+  id           String      @id @default(cuid())
+  type         String      @default("QUANTITY_BREAK")
+  name         String
+  status       String      @default("DRAFT") // DRAFT | ACTIVE | PAUSED
+  // JSON string: [{ "id": "gid://shopify/Product/123", "title": "Perfume A" }]
+  // Stored as String (not Json) so SQLite dev and Postgres prod behave identically.
+  productsJson String      @default("[]")
+  // Type-specific settings as a JSON string:
+  //   BOGO:       { "buyQty": 1, "getQty": 1, "percentOff": 100 }
+  //   FREE_GIFT:  { "thresholdX100": 30000, "giftProductId": "gid://...", "giftTitle": "..." }
+  //   MIX_MATCH:  { "minQty": 3, "percentOff": 20 }
+  configJson   String      @default("{}")
+  tiers        OfferTier[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model OfferTier {
+  id           String  @id @default(cuid())
+  offerId      String
+  offer        Offer   @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  position     Int
+  minQty       Int
+  // Per offer type the columns mean:
+  //  QUANTITY_BREAK: minQty + discountType + valueX100 (NONE|PERCENTAGE|FIXED_AMOUNT|FIXED_UNIT_PRICE)
+  //  BOGO:           minQty = buy qty, getQty = free/discounted qty, valueX100 = % off x100
+  //  FREE_GIFT:      valueX100 = spend threshold x100 (discountType = THRESHOLD), gift* fields
+  //  MIX_MATCH:      minQty = items needed, valueX100 = % off x100
+  discountType String
+  getQty       Int?
+  // Optional per-tier presentation (Kaching-style)
+  title        String? // e.g. "Starter Option" (overrides "Buy 1")
+  subtitle     String? // e.g. "Perfect for Daily Relaxation"
+  labelText    String? // e.g. "Save $35" (overrides computed SAVE %)
+  imageUrl     String? // Shopify Files CDN url, uploaded from the editor
+  // Optional per-tier perks
+  freeShipping  Boolean @default(false) // 100% off shipping when tier is reached
+  giftProductId String? // gid://shopify/Product/... auto-added free gift
+  giftVariantId String?
+  giftTitle     String?
+  // Integer, scaled by 100 — never floats for money/percent:
+  //   PERCENTAGE:       1000  = 10.00 %
+  //   FIXED_AMOUNT:     2000  = AED 20.00 off per unit
+  //   FIXED_UNIT_PRICE: 17900 = AED 179.00 per unit
+  valueX100    Int
+  badge        String?
+  preselected  Boolean @default(false)
+  // "Complete the bundle" cross-sell — extra product(s) added at FULL price
+  // alongside this tier (no discount applied to them).
+  // JSON string: [{ "productId": "gid://shopify/Product/...", "variantId": "gid://...", "title": "...", "handle": "..." }]
+  bundleProductsJson String @default("[]")
+}
+
+// Tiny key/value store (e.g. the GID of our automatic discount node).
+model Setting {
+  key   String @id
+  value String
+}
+
+// ── Analytics ──
+
+// Raw widget events (impressions). Pruned manually if it ever grows large.
+model OfferEvent {
+  id        Int      @id @default(autoincrement())
+  offerId   String
+  event     String   @default("impression")
+  createdAt DateTime @default(now())
+
+  @@index([offerId, event])
+}
+
+// One row per (offer, order) — written by the orders/create webhook.
+model OfferConversion {
+  id          String   @id @default(cuid())
+  offerId     String
+  orderId     String
+  orderName   String?
+  revenueX100 Int // discounted line revenue attributed to this offer, in cents
+  currency    String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@unique([offerId, orderId])
+  @@index([offerId])
+}

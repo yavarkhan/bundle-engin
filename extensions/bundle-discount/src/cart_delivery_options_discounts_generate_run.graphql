@@ -1,0 +1,26 @@
+# CREATE at extensions/bundle-discount/src/cart_delivery_options_discounts_generate_run.graphql
+query CartDeliveryOptionsDiscountsGenerateRun {
+  cart {
+    deliveryGroups {
+      id
+    }
+    lines {
+      id
+      quantity
+      merchandise {
+        __typename
+        ... on ProductVariant {
+          product {
+            id
+          }
+        }
+      }
+    }
+  }
+  discount {
+    discountClasses
+    metafield(namespace: "bundle_engine", key: "config") {
+      value
+    }
+  }
+}

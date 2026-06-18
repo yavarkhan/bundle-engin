@@ -1,0 +1,27 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "86c32a93e7e984c4cbe4c8566f1102aa"
+application_url = "https://example.com"
+embedded = true
+name = "bundle-engine"
+
+[webhooks]
+api_version = "2026-07"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_products,write_discounts,read_discounts,write_files,read_orders"
+[auth]
+redirect_urls = [ "https://example.com/api/auth" ]
+
+[build]
+automatically_update_urls_on_dev = true
+
+[[webhooks.subscriptions]]
+topics = ["orders/create"]
+uri = "/webhooks/orders/create"
+
+[app_proxy]
+url = "https://YOUR-CURRENT-APP-URL/proxy"
+subpath = "bundle-engine"
+prefix = "apps"

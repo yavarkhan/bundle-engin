@@ -1,0 +1,9 @@
+{
+  "bundle_widget": {
+    "name": "Bundle Widget",
+    "settings": {
+      "accent": "Accent color",
+      "heading": "Heading"
+    }
+  }
+}

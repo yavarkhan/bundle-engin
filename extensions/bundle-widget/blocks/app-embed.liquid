@@ -1,0 +1,173 @@
+{% comment %}
+  Bundle Engine — gift watcher (app embed, enable once in Theme Editor:
+  Theme settings -> App embeds -> Bundle gift watcher).
+  CREATE at extensions/bundle-widget/blocks/app-embed.liquid
+
+  Auto-adds/removes free gifts for:
+   1. FREE_GIFT offers (spend threshold)
+   2. QUANTITY_BREAK tiers with a per-tier gift ("Buy 3 -> free gift")
+  The Shopify Function is the price authority: gifts are only 100% off when
+  the rule is truly met, so this script cannot be exploited.
+  Renders NOTHING when no gift rules are active.
+{% endcomment %}
+
+{%- assign cfg = shop.metafields.bundle_engine.offers.value -%}
+{%- assign has_gifts = false -%}
+{%- if cfg and cfg.offers -%}
+  {%- for offer in cfg.offers -%}
+    {%- if offer.type == 'FREE_GIFT' and offer.giftVariantId -%}
+      {%- assign has_gifts = true -%}
+    {%- elsif offer.type == 'QUANTITY_BREAK' -%}
+      {%- for tier in offer.tiers -%}
+        {%- if tier.gift and tier.gift.vid -%}{%- assign has_gifts = true -%}{%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+
+{%- if has_gifts -%}
+<script>
+(function () {
+  "use strict";
+  var CFG = {{ cfg | json }};
+  var busy = false;
+  var timer = null;
+
+  function evaluateGifts(cart) {
+    var desired = {}; // variant id -> true (should be in cart)
+    var known = {};   // every configured gift variant id (for cleanup)
+    var qtyByPid = {};
+    cart.items.forEach(function (it) {
+      var k = String(it.product_id);
+      qtyByPid[k] = (qtyByPid[k] || 0) + it.quantity;
+    });
+
+    (CFG.offers || []).forEach(function (o) {
+      if (o.type === "FREE_GIFT") {
+        // Ladder of thresholds (tiers) with legacy single-threshold fallback.
+        var ladder = [];
+        (o.tiers || []).forEach(function (t) {
+          if (t.t === "THRESHOLD" && t.gift && t.gift.vid) {
+            ladder.push({ thr: t.v, vid: String(t.gift.vid), pid: String(t.gift.pid) });
+          }
+        });
+        if (!ladder.length && o.giftVariantId) {
+          ladder.push({
+            thr: o.thresholdX100 || 0,
+            vid: String(o.giftVariantId),
+            pid: String(o.giftProductId),
+          });
+        }
+        if (ladder.length) {
+          var giftPids = {};
+          ladder.forEach(function (g) { known[g.vid] = true; giftPids[g.pid] = true; });
+          var sub = 0;
+          cart.items.forEach(function (it) {
+            if (!giftPids[String(it.product_id)]) sub += it.final_line_price;
+          });
+          var best = null;
+          ladder.forEach(function (g) {
+            if (sub >= g.thr && (!best || g.thr > best.thr)) best = g;
+          });
+          if (best) desired[best.vid] = true;
+        }
+      }
+      if (o.type === "QUANTITY_BREAK" && o.tiers) {
+        o.tiers.forEach(function (t) {
+          if (t.gift && t.gift.vid) known[String(t.gift.vid)] = true;
+        });
+        (o.productIds || []).forEach(function (pid) {
+          var q = qtyByPid[String(pid)] || 0;
+          var best = null;
+          o.tiers.forEach(function (t) {
+            if (q >= t.minQty && (!best || t.minQty > best.minQty)) best = t;
+          });
+          if (best && best.gift && best.gift.vid) desired[String(best.gift.vid)] = true;
+        });
+      }
+    });
+    return { desired: desired, known: known };
+  }
+
+  function check() {
+    if (busy) return;
+    fetch("/cart.js", { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (cart) {
+        var res = evaluateGifts(cart);
+        var inCart = {};
+        var removeKey = null;
+        cart.items.forEach(function (it) {
+          var vid = String(it.variant_id);
+          if (res.known[vid]) {
+            inCart[vid] = true;
+            if (!res.desired[vid] && !removeKey) removeKey = it.key;
+          }
+        });
+        var addVid = null;
+        Object.keys(res.desired).forEach(function (vid) {
+          if (!inCart[vid] && !addVid) addVid = vid;
+        });
+
+        if (addVid) {
+          busy = true;
+          fetch("/cart/add.js", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ items: [{ id: parseInt(addVid, 10), quantity: 1 }] })
+          }).finally(function () { busy = false; refreshCartUI(); schedule(); });
+        } else if (removeKey) {
+          busy = true;
+          fetch("/cart/change.js", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ id: removeKey, quantity: 0 })
+          }).finally(function () { busy = false; refreshCartUI(); schedule(); });
+        }
+      })
+      .catch(function () { /* never break the storefront */ });
+  }
+
+  function refreshCartUI() {
+    document.dispatchEvent(new CustomEvent("cart:refresh", { bubbles: true }));
+    if (location.pathname === "/cart") location.reload();
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(check, 600);
+  }
+
+  var origFetch = window.fetch;
+  window.fetch = function (input, init) {
+    var url = typeof input === "string" ? input : (input && input.url) || "";
+    var p = origFetch.apply(this, arguments);
+    if (/\/cart\/(add|change|update|clear)/.test(url) && !busy) {
+      p.then(schedule, function () {});
+    }
+    return p;
+  };
+  var origOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    if (/\/cart\/(add|change|update|clear)/.test(String(url)) && !busy) {
+      this.addEventListener("loadend", schedule);
+    }
+    return origOpen.apply(this, arguments);
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", schedule);
+  } else {
+    schedule();
+  }
+})();
+</script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Bundle gift watcher",
+  "target": "body",
+  "settings": []
+}
+{% endschema %}
